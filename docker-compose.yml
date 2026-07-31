@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  flights-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: voobarato-flights-api
+    restart: unless-stopped
+    ports:
+      - "12000:12000"
+    environment:
+      - FLIGHTS_LANGUAGE=pt-BR
+      - FLIGHTS_COUNTRY=BR
+      - FLIGHTS_CURRENCY=BRL
+      - REQUEST_TIMEOUT_SECONDS=20
+      - FLIGHTS_API_INTERNAL_TOKEN=${FLIGHTS_API_INTERNAL_TOKEN:-voobarato_secret_token_12345}
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:12000/saude"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
