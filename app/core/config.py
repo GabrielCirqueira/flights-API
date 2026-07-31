@@ -1,6 +1,7 @@
 
 import os
 
+
 class Configuracoes:
     NOME_SERVICO: str = "voobarato-flights-api"
     VERSAO_SERVICO: str = "1.0.0"

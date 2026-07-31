@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Query
 
-from app.schemas.response import AeroportoSaida, RespostaListaAeroportos
-from app.services import servico_fli
+from app.schemas.aeroportos import AeroportoSaida, RespostaListaAeroportos
+from app.services.aeroportos.consulta import listar_aeroportos, obter_aeroporto_por_codigo
 
 roteador = APIRouter(prefix="/api/v1", tags=["aeroportos"])
 
+
 @roteador.get("/aeroportos", response_model=RespostaListaAeroportos)
-def listar_aeroportos(
+def listar_aeroportos_endpoint(
     busca: str | None = Query(
         default=None,
         min_length=1,
@@ -38,7 +39,7 @@ def listar_aeroportos(
         description="Quantidade máxima de resultados a retornar",
     ),
 ) -> RespostaListaAeroportos:
-    return servico_fli.listar_aeroportos(
+    return listar_aeroportos(
         busca=busca,
         cidade=cidade,
         estado=estado,
@@ -47,6 +48,7 @@ def listar_aeroportos(
         limite=limite,
     )
 
+
 @roteador.get("/aeroportos/{codigo_iata}", response_model=AeroportoSaida)
 def obter_aeroporto(codigo_iata: str) -> AeroportoSaida:
-    return servico_fli.obter_aeroporto_por_codigo(codigo_iata)
+    return obter_aeroporto_por_codigo(codigo_iata)
