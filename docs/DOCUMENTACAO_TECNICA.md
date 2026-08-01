@@ -11,7 +11,7 @@ Microsserviço HTTP em **Python 3.10+ / FastAPI** que expõe busca de voos e con
 | **Health check** | Endpoint público `/saude` para monitoramento (Docker, Kubernetes, load balancers). |
 | **Busca pontual** | `POST /api/v1/buscar` — voos em data exata (ida ou ida e volta), com ofertas completas. |
 | **Busca por janela** | `POST /api/v1/buscar/janela` — preço mínimo por dia em um intervalo; opcionalmente expande as datas mais baratas. |
-| **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA em aeroportos, testa combinações em paralelo e retorna a melhor oferta global. |
+| **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA, testa combinações em paralelo e retorna **todas as ofertas** ordenadas por preço. |
 | **Catálogo de aeroportos** | `GET /api/v1/aeroportos` — autocomplete e filtros; `GET /api/v1/aeroportos/{iata}` — detalhe por código. |
 
 **Contrato da API:** campos JSON, rotas e DTOs em **português (PT-BR)**. Horários de voo (`data_hora_partida`, `data_hora_chegada`) são **naive** (horário local do aeroporto, sem timezone/`Z`).
@@ -89,7 +89,7 @@ Validação e serialização com **Pydantic v2**. Separação por domínio:
 | Arquivo | Conteúdo |
 |---|---|
 | `aeroportos.py` | `AeroportoSaida`, `RespostaListaAeroportos` |
-| `voos.py` | `TipoLocal`, requisições (`RequisicaoBusca*`), respostas (`RespostaBusca*`), `OfertaVooSaida`, `TrechoVooSaida`, etc. |
+| `voos.py` | `TipoLocal`, requisições (`RequisicaoBusca*`), respostas, `OfertaVooSaida`, `ParadaRotaSaida`, `TrechoVooSaida`, `OfertaBuscaPorLocalSaida` |
 
 Os routers importam diretamente destes módulos; não há lógica de negócio aqui.
 
@@ -118,7 +118,7 @@ Isola o acoplamento com o pacote `fli`. Se a API do Google Flights mudar, a alte
 | Arquivo | Responsabilidade |
 |---|---|
 | `dados.py` | `ESTADOS_BRASIL` (sigla ↔ nome) e `MAPEAMENTO_AEROPORTOS` — metadados enriquecidos (cidade, estado, país, `principal`, `descricao_curta`) para aeroportos relevantes. |
-| `texto.py` | Normalização de texto (`remover_acentos`), resolução de UF e montagem de `AeroportoSaida`. |
+| `texto.py` | Normalização de texto, resolução de UF, montagem de `AeroportoSaida`, `obter_cidade_por_iata()`. |
 | `indice.py` | Pré-computa `INDICE_AEROPORTOS` no startup a partir do enum `Airport` do `fli` (~7.800 aeroportos), com campos normalizados para busca rápida. |
 | `consulta.py` | `listar_aeroportos()` — autocomplete com ranking por relevância; `obter_aeroporto_por_codigo()`. |
 | `resolucao.py` | `resolver_aeroportos_candidatos()` — converte cidade/estado/IATA em lista de códigos (até 3, priorizando aeroportos principais). Usado pela busca por local. |
@@ -127,11 +127,11 @@ Isola o acoplamento com o pacote `fli`. Se a API do Google Flights mudar, a alte
 
 | Arquivo | Responsabilidade |
 |---|---|
-| `mapeamento.py` | Converte `FlightResult` do `fli` → `OfertaVooSaida` / `TrechoVooSaida`; trata ida e volta como oferta única; descarta preço `null` ou `≤ 0`; monta URL fallback do Google Flights. |
-| `cache.py` | Cache em memória (TTL 5 min) de buscas por par IATA + data — evita chamadas duplicadas na busca por local. |
+| `mapeamento.py` | Converte `FlightResult` → `OfertaVooSaida`; flags `direto`/`com_conexao`; `rota_iata` com IATA+cidade; URL Google Flights (`one way` / `returning`). |
+| `cache.py` | Cache em memória (TTL 5 min) de buscas por par IATA + data. |
 | `busca.py` | `buscar_voos()` — busca pontual via `SearchFlights`. |
-| `busca_janela.py` | `buscar_janela()` — calendário de preços via `SearchDates`; expande top N datas com `buscar_voos`. |
-| `busca_por_local.py` | `buscar_voos_por_local()` — produto cartesiano de aeroportos, execução paralela (`ThreadPoolExecutor`, até 4 workers), consolidação da melhor oferta. |
+| `busca_janela.py` | `buscar_janela()` — calendário de preços via `SearchDates`. |
+| `busca_por_local.py` | `buscar_voos_por_local()` — produto cartesiano, paralelismo (4 workers), lista completa de ofertas. |
 
 ---
 
@@ -193,8 +193,11 @@ Tuplas `(voo_ida, voo_volta)` do `fli` viram **uma única** `OfertaVooSaida` com
 ### Janela vs data exata
 `/buscar/janela` retorna preço por dia em `por_data`. Para exibir ao usuário, expandir a data vencedora com `/buscar` — nunca usar o mínimo da janela como preço de um dia específico sem expansão.
 
-### Escalas
-`maximo_escalas` padrão é `"ANY"`, permitindo conexões em rotas sem voo direto.
+### Escalas e conexões
+`maximo_escalas` padrão é `"ANY"`. O Google Flights monta itinerários com escala automaticamente em rotas sem voo direto (ex: VIX→GYN via VCP). Cada oferta expõe `direto`, `com_conexao`, `rota_iata` e `aeroportos_conexao`.
+
+### Preço só ida vs ida e volta
+Com `data_retorno: null`, o preço reflete **apenas a ida**. A URL do Google Flights inclui `one way`; com retorno, inclui `returning YYYY-MM-DD`.
 
 ### Aeroportos na mesma cidade
 Campo `descricao_curta` diferencia hubs (ex.: GRU vs CGH vs VCP em São Paulo).

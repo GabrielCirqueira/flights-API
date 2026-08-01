@@ -6,12 +6,15 @@ O `voobarato-flights-api` atua como uma ponte de alta performance entre a aplica
 
 ```mermaid
 graph TD
-    Client[Symfony Backend / Consumers] -->|HTTP POST + X-Internal-Token| FastAPI[FastAPI App / app/main.py]
-    FastAPI --> Middleware[Middleware verificar_token_interno]
-    Middleware --> Routers[Routers / app/routers/buscar.py]
-    Routers --> Schemas[Pydantic Validation / app/schemas/]
-    Routers --> Service[Fli Service / app/services/servico_fli.py]
-    Service -->|Engine RPC + TLS Fingerprint| GoogleFlights[Google Flights RPC Internal API]
+    Client[Symfony Backend / Consumers] -->|HTTP POST + X-Internal-Token| FastAPI[app/main.py]
+    FastAPI --> Middleware[core/middleware.py]
+    Middleware --> Routers[app/routers/]
+    Routers --> Schemas[app/schemas/]
+    Routers --> Services[app/services/]
+    Services --> FliAdapt[app/services/fli/]
+    Services --> Voos[app/services/voos/]
+    Services --> Aeroportos[app/services/aeroportos/]
+    FliAdapt -->|Engine RPC + TLS Fingerprint| GoogleFlights[Google Flights RPC Internal API]
 ```
 
 ## 2. Decisões de Design
@@ -25,7 +28,16 @@ O mecanismo anterior baseava-se em navegar em instâncias do Chromium ou ler HTM
 O pacote `fli` se comunica diretamente com o endpoint RPC interno do Google Flights via cliente de rede `curl_cffi`, simulando o fingerprint TLS de navegadores reais (evitando captchas e bloqueios de IP).
 
 ### Padrão de Projeto no Service Layer
-Todo o código relacionado à especificação da biblioteca `fli` fica estritamente isolado em `app/services/servico_fli.py`. A aplicação FastAPI interage apenas com DTOs Pydantic limpos em português. Caso no futuro o Google Flights altere seu contrato RPC ou outra API seja adotada, apenas a camada do `servico_fli.py` precisará de modificação.
+O acoplamento com a biblioteca `fli` fica isolado em `app/services/fli/` e `app/services/voos/`. A aplicação FastAPI interage apenas com DTOs Pydantic em português. Domínios separados:
+
+| Pacote | Responsabilidade |
+|---|---|
+| `services/fli/` | Adaptadores: enums, resolução de IATA |
+| `services/voos/` | Busca, mapeamento de ofertas, cache, URL Google Flights |
+| `services/aeroportos/` | Catálogo, autocomplete, resolução cidade→IATA |
+
+### Ofertas com conexão
+Com `maximo_escalas: "ANY"`, o Google Flights resolve automaticamente rotas sem voo direto. A API enriquece cada oferta com `direto`, `com_conexao`, `rota_iata` (IATA + cidade) e `aeroportos_conexao` — sem lógica extra de roteamento no backend.
 
 ## 3. Estratégia de Resolução do Bug de Janela vs Data Exata
 
@@ -35,3 +47,8 @@ No novo modelo:
 1. `/api/v1/buscar/janela` é usada para mapear o calendário de preços.
 2. Cada item em `por_data` vincula estritamente `data` e `preco`.
 3. As datas mais baratas são opcionalmente expandidas via `expandir_top`, gerando objetos `OfertaVooSaida` completos com percursos, horários e companhia aérea responsável.
+
+## 4. Documentação complementar
+
+- [`DOCUMENTACAO_TECNICA.md`](./DOCUMENTACAO_TECNICA.md) — estrutura de pastas e arquivos
+- [`API.md`](./API.md) — contratos REST e exemplos

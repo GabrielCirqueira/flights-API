@@ -41,14 +41,54 @@ X-Internal-Token: voobarato_secret_token_12345
 
 ### 2. Máximo de Escalas (`maximo_escalas`)
 - `"ANY"`: Qualquer quantidade de escalas (Padrão)
-- `"DIRECT"`: Apenas voos diretos (sem escalas)
-- `"MAX_1_STOP"`: No máximo 1 escala
-- `"MAX_2_STOPS"`: No máximo 2 escalas
+- `"NON_STOP"`: Apenas voos diretos (sem escalas)
+- `"ONE_STOP"`: No máximo 1 escala
+- `"TWO_PLUS_STOPS"`: No máximo 2 escalas
 
 ### 3. Ordenação (`ordenar_por`)
 - `"CHEAPEST"`: Ordenar por menor preço (Padrão)
-- `"BEST"`: Ordenar por melhor custo-benefício (duração vs preço)
-- `"FASTEST"`: Ordenar por menor duração total do voo
+- `"BEST"`: Melhor custo-benefício
+- `"TOP_FLIGHTS"`: Voos mais populares
+- `"DURATION"`: Menor duração
+- `"DEPARTURE_TIME"`: Horário de partida
+- `"ARRIVAL_TIME"`: Horário de chegada
+
+---
+
+## 📦 Modelo `OfertaVooSaida`
+
+Presente em `/buscar`, `/buscar/janela` (expandidas) e `/buscar/por-local`.
+
+| Campo | Tipo | Descrição |
+| :--- | :--- | :--- |
+| `preco` | `float` | Preço total da oferta (ida ou ida+volta conforme a busca) |
+| `moeda` | `string` | Moeda (ex: `"BRL"`) |
+| `duracao_minutos` | `integer` | Duração total em minutos |
+| `escalas` | `integer` | Quantidade de escalas |
+| `direto` | `boolean` | `true` se voo sem escalas |
+| `com_conexao` | `boolean` | `true` se passa por hub(s) intermediários |
+| `rota_iata` | `array` | Sequência da rota: `[{ "iata": "VIX", "cidade": "Vitória" }, ...]` |
+| `aeroportos_conexao` | `array` | Hubs intermediários (mesmo formato de `rota_iata`) |
+| `companhia_principal` | `string` | Companhia principal |
+| `trechos` | `array` | Pernas do voo (ver abaixo) |
+| `url_busca_google_flights` | `string` | Link de conferência no Google Flights (`one way` ou `returning` conforme a busca) |
+| `encontrado_em` | `datetime` | Timestamp UTC da consulta |
+| `fonte` | `string` | Sempre `"fli"` |
+
+### Trecho (`trechos[]`)
+
+| Campo | Descrição |
+| :--- | :--- |
+| `iata_partida` / `iata_chegada` | Códigos IATA |
+| `aeroporto_partida` / `aeroporto_chegada` | Nome completo do aeroporto |
+| `data_hora_partida` / `data_hora_chegada` | Horário local naive (sem `Z`) |
+| `numero_voo`, `aeronave`, `companhia_aerea` | Detalhes operacionais |
+
+> [!NOTE]
+> **Preço só ida vs ida e volta**: com `data_retorno: null`, o preço é **só da ida**. No Google Flights, o mesmo trecho pode aparecer como metade do preço de um pacote ida e volta. A URL gerada inclui `one way` ou `returning YYYY-MM-DD` para bater com o tipo de busca.
+
+> [!NOTE]
+> **Rotas com conexão**: com `maximo_escalas: "ANY"` (padrão), o Google Flights monta itinerários com escala automaticamente (ex: VIX→GYN via VCP). Voos diretos e com conexão coexistem; a lista vem ordenada por preço.
 
 ---
 
@@ -119,7 +159,7 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar \
 | `classe_cabine` | `string` | Não | Enum da cabine (padrão: `"ECONOMY"`) |
 | `maximo_escalas` | `string` | Não | Enum de escalas (padrão: `"ANY"`) |
 | `ordenar_por` | `string` | Não | Enum de ordenação (padrão: `"CHEAPEST"`) |
-| `limite_top` | `integer` | Não | Quantidade máxima de ofertas completas a retornar (mín: 1, máx: 20, padrão: 5) |
+| `limite_top` | `integer` | Não | Quantidade máxima de ofertas (mín: 1, máx: 50, padrão: 10) |
 
 > [!WARNING]
 > **Fuso Horário de Partida e Chegada (Hora Local do Aeroporto)**:
@@ -138,27 +178,36 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar \
   "total": 1,
   "ofertas": [
     {
-      "preco": 385.50,
+      "preco": 452.0,
       "moeda": "BRL",
-      "duracao_minutos": 105,
+      "duracao_minutos": 100,
       "escalas": 0,
-      "companhia_principal": "LATAM",
-      "nome_companhia_principal": "LATAM Airlines",
+      "direto": true,
+      "com_conexao": false,
+      "rota_iata": [
+        { "iata": "VIX", "cidade": "Vitória" },
+        { "iata": "GRU", "cidade": "São Paulo" }
+      ],
+      "aeroportos_conexao": [],
+      "companhia_principal": "Gol Transportes Aéreos",
+      "nome_companhia_principal": "Gol",
       "trechos": [
         {
-          "companhia_aerea": "LATAM",
-          "nome_companhia_aerea": "LATAM Airlines",
-          "numero_voo": "LA3450",
-          "aeroporto_partida": "VIX",
-          "aeroporto_chegada": "GRU",
-          "data_hora_partida": "2026-08-10T14:30:00",
-          "data_hora_chegada": "2026-08-10T16:15:00",
-          "duracao_minutos": 105,
-          "aeronave": "Airbus A320",
+          "iata_partida": "VIX",
+          "iata_chegada": "GRU",
+          "aeroporto_partida": "Eurico de Aguiar Salles Airport",
+          "aeroporto_chegada": "Guarulhos - Governador Andre Franco Montoro International Airport",
+          "companhia_aerea": "Gol Transportes Aéreos",
+          "nome_companhia_aerea": "Gol",
+          "numero_voo": "1387",
+          "data_hora_partida": "2026-08-10T18:40:00",
+          "data_hora_chegada": "2026-08-10T20:20:00",
+          "duracao_minutos": 100,
+          "aeronave": "Boeing 737",
           "companhia_operadora": null
         }
       ],
-      "url_busca_google_flights": "https://www.google.com/travel/flights?q=Flights+to+GRU+from+VIX+on+2026-08-10&hl=pt-BR&gl=BR&curr=BRL",
+      "url_busca_google_flights": "https://www.google.com/travel/flights?q=Flights+from+VIX+to+GRU+on+2026-08-10+one+way&hl=pt-BR&gl=BR&curr=BRL",
       "encontrado_em": "2026-07-31T10:30:00Z",
       "fonte": "fli"
     }
@@ -229,9 +278,12 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/janela \
 ---
 
 ### 4. `POST /api/v1/buscar/por-local`
-Busca de voos por **localidade (cidade, estado ou aeroporto)**. A API resolve os aeroportos comerciais elegíveis para cada ponto, gera o produto cartesiano das combinações, roda as buscas em **paralelo (com limite de 4 workers)** e aplica **cache em memória curto (5 min)**.
+Busca de voos por **localidade (cidade, estado ou aeroporto)**. A API resolve aeroportos elegíveis, gera o produto cartesiano das combinações, roda buscas em **paralelo (até 4 workers)** com **cache em memória (5 min)** e retorna **todas as ofertas** de todas as combinações, ordenadas por preço.
 
-#### 💻 Exemplo `curl` (Vitória para São Paulo):
+> [!NOTE]
+> Resolução por **cidade** faz match exato no nome (ex: `"São Paulo"` → GRU + CGH; Viracopos/VCP fica em `"Campinas"`).
+
+#### 💻 Exemplo `curl` (Vitória para Goiânia):
 ```bash
 curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
   -H "Content-Type: application/json" \
@@ -240,7 +292,7 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
     "origem_tipo": "cidade",
     "origem_valor": "Vitória",
     "destino_tipo": "cidade",
-    "destino_valor": "São Paulo",
+    "destino_valor": "Goiânia",
     "data_partida": "2026-08-10"
   }'
 ```
@@ -248,39 +300,58 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
 #### 📦 Campos de Requisição (Request Payload):
 | Campo | Tipo | Obrigatório | Descrição |
 | :--- | :--- | :--- | :--- |
-| `origem_tipo` | `string` | Sim | Enum do tipo de origem (`"cidade"`, `"estado"`, `"aeroporto"`) |
-| `origem_valor` | `string` | Sim | Nome da cidade, estado (ex: `"ES"` / `"Goiás"`) ou código IATA |
-| `destino_tipo` | `string` | Sim | Enum do tipo de destino (`"cidade"`, `"estado"`, `"aeroporto"`) |
-| `destino_valor` | `string` | Sim | Nome da cidade, estado ou código IATA |
+| `origem_tipo` | `string` | Sim | `"cidade"`, `"estado"` ou `"aeroporto"` |
+| `origem_valor` | `string` | Sim | Nome da cidade, estado (ex: `"ES"`) ou IATA |
+| `destino_tipo` | `string` | Sim | `"cidade"`, `"estado"` ou `"aeroporto"` |
+| `destino_valor` | `string` | Sim | Nome da cidade, estado ou IATA |
 | `data_partida` | `string` | Sim | Data de partida `YYYY-MM-DD` |
-| `data_retorno` | `string` | Não | Data de retorno `YYYY-MM-DD` |
+| `data_retorno` | `string` | Não | Data de retorno `YYYY-MM-DD` (omitir = só ida) |
+| `limite_top` | `integer` | Não | Ofertas por combinação IATA (padrão: 20, máx: 50) |
+| `maximo_escalas` | `string` | Não | Padrão `"ANY"` |
 
 #### 📤 Resposta `200 OK`:
 ```json
 {
   "origem_buscada": "Vitória",
-  "destino_buscado": "São Paulo",
+  "destino_buscado": "Goiânia",
   "data_partida": "2026-08-10",
   "data_retorno": null,
   "moeda": "BRL",
-  "melhor_oferta": {
-    "preco": 385.50,
-    "moeda": "BRL",
-    "duracao_minutos": 105,
-    "escalas": 0,
-    "companhia_principal": "LATAM",
-    "nome_companhia_principal": "LATAM Airlines",
-    "trechos": [ ... ]
-  },
+  "total": 120,
+  "ofertas": [
+    {
+      "preco": 693.0,
+      "escalas": 1,
+      "direto": false,
+      "com_conexao": true,
+      "rota_iata": [
+        { "iata": "VIX", "cidade": "Vitória" },
+        { "iata": "VCP", "cidade": "Campinas" },
+        { "iata": "GYN", "cidade": "Goiânia" }
+      ],
+      "aeroportos_conexao": [
+        { "iata": "VCP", "cidade": "Campinas" }
+      ],
+      "aeroporto_origem_iata": "VIX",
+      "aeroporto_destino_iata": "GYN",
+      "trechos": [ "..." ]
+    }
+  ],
+  "melhor_oferta": { "...": "mesma estrutura da oferta mais barata" },
   "aeroporto_origem_usado": "VIX",
-  "aeroporto_destino_usado": "GRU",
+  "aeroporto_destino_usado": "GYN",
   "todas_combinacoes": [
-    { "origem_iata": "VIX", "destino_iata": "GRU", "preco_minimo": 385.50, "sucesso": true },
-    { "origem_iata": "VIX", "destino_iata": "CGH", "preco_minimo": 512.00, "sucesso": true },
-    { "origem_iata": "VIX", "destino_iata": "VCP", "preco_minimo": 690.00, "sucesso": true }
+    { "origem_iata": "VIX", "destino_iata": "GYN", "preco_minimo": 693.0, "sucesso": true }
   ]
 }
 ```
+
+| Campo | Descrição |
+| :--- | :--- |
+| `ofertas` | Todas as ofertas de todas as combinações, ordenadas por preço |
+| `melhor_oferta` | Atalho para a oferta mais barata (compatibilidade) |
+| `todas_combinacoes` | Resumo por par IATA (menor preço de cada combinação) |
+| `aeroporto_origem_iata` / `aeroporto_destino_usado` | Par IATA da oferta mais barata |
 
 ---
 
@@ -359,7 +430,7 @@ curl "http://127.0.0.1:12000/api/v1/aeroportos?estado=GO&apenas_principais=true"
 
 ---
 
-### 5. `GET /api/v1/aeroportos/{codigo_iata}`
+### 6. `GET /api/v1/aeroportos/{codigo_iata}`
 Consulta direta dos detalhes de um aeroporto a partir do código IATA de 3 letras (ex: `GRU`, `VIX`, `BSB`).
 
 #### 💻 Exemplo `curl`:

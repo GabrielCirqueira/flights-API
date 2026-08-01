@@ -4,7 +4,8 @@ from urllib.parse import urlencode
 from fli.models.google_flights.base import FlightResult
 
 from app.core.config import configuracoes
-from app.schemas.voos import OfertaVooSaida, TrechoVooSaida
+from app.schemas.voos import OfertaVooSaida, ParadaRotaSaida, TrechoVooSaida
+from app.services.aeroportos.texto import obter_cidade_por_iata
 
 
 def url_google_flights(
@@ -44,13 +45,21 @@ def _nome_aeroporto(aeroporto) -> str:
     return str(aeroporto)
 
 
-def _montar_info_rota(trechos: list[TrechoVooSaida], escalas: int) -> tuple[bool, bool, list[str], list[str]]:
+def _parada_rota(iata: str) -> ParadaRotaSaida:
+    return ParadaRotaSaida(iata=iata, cidade=obter_cidade_por_iata(iata))
+
+
+def _montar_info_rota(
+    trechos: list[TrechoVooSaida], escalas: int
+) -> tuple[bool, bool, list[ParadaRotaSaida], list[ParadaRotaSaida]]:
     if not trechos:
         return True, False, [], []
 
-    rota_iata = [trechos[0].iata_partida]
+    codigos = [trechos[0].iata_partida]
     for trecho in trechos:
-        rota_iata.append(trecho.iata_chegada)
+        codigos.append(trecho.iata_chegada)
+
+    rota_iata = [_parada_rota(codigo) for codigo in codigos]
 
     direto = escalas == 0 and len(trechos) == 1
     com_conexao = not direto

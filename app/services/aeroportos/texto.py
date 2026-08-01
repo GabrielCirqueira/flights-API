@@ -36,3 +36,14 @@ def construir_aeroporto_saida(item: Airport) -> AeroportoSaida:
             descricao_curta=desc,
         )
     return AeroportoSaida(codigo_iata=codigo, nome=nome, principal=False)
+
+
+def obter_cidade_por_iata(iata: str) -> str | None:
+    codigo = iata.strip().upper()
+    info = MAPEAMENTO_AEROPORTOS.get(codigo)
+    if info:
+        return info[0]
+    aeroporto = getattr(Airport, codigo, None)
+    if aeroporto is not None:
+        return construir_aeroporto_saida(aeroporto).cidade
+    return None

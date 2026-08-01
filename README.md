@@ -53,8 +53,8 @@ O `Makefile` é apenas um **atalho opcional**. Você não precisa usar todos os 
 | Comando | Quando usar? | O que ele faz? |
 | :--- | :--- | :--- |
 | `make dev` | No dia a dia local | Cria venv, instala dependências e sobe a API (`--reload`) |
-| `make test` | Sempre que alterar código | Roda todos os testes unitários (`pytest`) |
 | `make lint` | Para verificar código | Roda verificação de código (`ruff`) |
+| `make format` | Formatar código | Aplica formatação automática (`ruff format`) |
 | `make docker-build` | Para criar a imagem Docker | Roda `docker build` |
 | `make run` | Em servidor sem Docker | Sobe a API em produção com 2 workers |
 | `make cli-saude` | Testar o /saude | Executa `./cli/saude.sh` |
@@ -63,16 +63,10 @@ O `Makefile` é apenas um **atalho opcional**. Você não precisa usar todos os 
 
 ---
 
-## 🧪 Testes e Qualidade de Código
+## 🧪 Qualidade de Código
 
 ```bash
-# Executar a suíte de testes unitários e de validação
-make test
-
-# Verificar formatação e regras de linting
 make lint
-
-# Aplicar correções automáticas de formatação
 make format
 ```
 
@@ -80,8 +74,9 @@ make format
 
 ## 📚 Documentação Técnica Detalhada
 
-* **[Especificação da API REST (`docs/API.md`)](file:///home/gabriel/dev/pessoal/voo-flights/docs/API.md)**: Detalhamento dos endpoints (`/saude`, `/api/v1/buscar`, `/api/v1/buscar/janela`), payloads e JSONs em português.
-* **[Arquitetura e Decisões de Design (`docs/ARCHITECTURE.md`)](file:///home/gabriel/dev/pessoal/voo-flights/docs/ARCHITECTURE.md)**: Visão geral da arquitetura, fluxo de dados e estratégia de resolução do problema de janelas de preços.
+* **[Documentação Técnica (`docs/DOCUMENTACAO_TECNICA.md`)](./docs/DOCUMENTACAO_TECNICA.md)**: Estrutura de pastas, arquivos e funcionalidade geral.
+* **[Especificação da API REST (`docs/API.md`)](./docs/API.md)**: Endpoints, payloads, modelos de oferta e exemplos curl.
+* **[Arquitetura e Decisões de Design (`docs/ARCHITECTURE.md`)](./docs/ARCHITECTURE.md)**: Visão geral, fluxo de dados e decisões de design.
 
 ---
 

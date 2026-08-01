@@ -100,6 +100,11 @@ class TrechoVooSaida(BaseModel):
     companhia_operadora: str | None = None
 
 
+class ParadaRotaSaida(BaseModel):
+    iata: str
+    cidade: str | None = None
+
+
 class OfertaVooSaida(BaseModel):
     preco: float
     moeda: str
@@ -107,8 +112,8 @@ class OfertaVooSaida(BaseModel):
     escalas: int
     direto: bool
     com_conexao: bool
-    rota_iata: list[str]
-    aeroportos_conexao: list[str]
+    rota_iata: list[ParadaRotaSaida]
+    aeroportos_conexao: list[ParadaRotaSaida]
     companhia_principal: str
     nome_companhia_principal: str | None = None
     trechos: list[TrechoVooSaida]
