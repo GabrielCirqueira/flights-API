@@ -76,7 +76,7 @@ class RequisicaoBuscaPorLocal(BaseModel):
     classe_cabine: str = Field(default="ECONOMY")
     maximo_escalas: str = Field(default="ANY")
     ordenar_por: str = Field(default="CHEAPEST")
-    limite_top: int = Field(default=5, ge=1, le=20)
+    limite_top: int = Field(default=20, ge=1, le=50)
 
     @model_validator(mode="after")
     def validar_data_retorno(self) -> "RequisicaoBuscaPorLocal":
@@ -145,12 +145,19 @@ class CombinacaoVooSaida(BaseModel):
     mensagem_erro: str | None = None
 
 
+class OfertaBuscaPorLocalSaida(OfertaVooSaida):
+    aeroporto_origem_iata: str
+    aeroporto_destino_iata: str
+
+
 class RespostaBuscaPorLocal(BaseModel):
     origem_buscada: str
     destino_buscado: str
     data_partida: str
     data_retorno: str | None = None
     moeda: str
+    ofertas: list[OfertaBuscaPorLocalSaida]
+    total: int
     melhor_oferta: OfertaVooSaida | None = None
     aeroporto_origem_usado: str | None = None
     aeroporto_destino_usado: str | None = None

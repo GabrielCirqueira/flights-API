@@ -5,7 +5,7 @@ from fastapi import HTTPException
 from app.core.config import configuracoes
 from app.schemas.voos import (
     CombinacaoVooSaida,
-    OfertaVooSaida,
+    OfertaBuscaPorLocalSaida,
     RequisicaoBusca,
     RequisicaoBuscaPorLocal,
     RespostaBusca,
@@ -65,7 +65,7 @@ def buscar_voos_por_local(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaP
         )
 
     resultados_combinacoes: list[CombinacaoVooSaida] = []
-    ofertas_todas: list[tuple[OfertaVooSaida, str, str]] = []
+    ofertas_todas: list[OfertaBuscaPorLocalSaida] = []
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(requisicoes_par), 4)) as executor:
         futures = [executor.submit(_executar_busca_par, req) for req in requisicoes_par]
@@ -92,13 +92,17 @@ def buscar_voos_por_local(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaP
                     )
                 )
                 for of in res_busca.ofertas:
-                    ofertas_todas.append((of, orig, dest))
+                    ofertas_todas.append(
+                        OfertaBuscaPorLocalSaida(
+                            **of.model_dump(),
+                            aeroporto_origem_iata=orig,
+                            aeroporto_destino_iata=dest,
+                        )
+                    )
 
-    ofertas_todas.sort(key=lambda item: item[0].preco)
+    ofertas_todas.sort(key=lambda item: item.preco)
 
-    melhor_oferta = ofertas_todas[0][0] if ofertas_todas else None
-    origem_usada = ofertas_todas[0][1] if ofertas_todas else None
-    destino_usado = ofertas_todas[0][2] if ofertas_todas else None
+    melhor = ofertas_todas[0] if ofertas_todas else None
 
     return RespostaBuscaPorLocal(
         origem_buscada=requisicao.origem_valor,
@@ -106,8 +110,10 @@ def buscar_voos_por_local(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaP
         data_partida=requisicao.data_partida.isoformat(),
         data_retorno=requisicao.data_retorno.isoformat() if requisicao.data_retorno else None,
         moeda=configuracoes.MOEDA_PADRAO,
-        melhor_oferta=melhor_oferta,
-        aeroporto_origem_usado=origem_usada,
-        aeroporto_destino_usado=destino_usado,
+        ofertas=ofertas_todas,
+        total=len(ofertas_todas),
+        melhor_oferta=melhor,
+        aeroporto_origem_usado=melhor.aeroporto_origem_iata if melhor else None,
+        aeroporto_destino_usado=melhor.aeroporto_destino_iata if melhor else None,
         todas_combinacoes=resultados_combinacoes,
     )
