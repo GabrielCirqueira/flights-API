@@ -66,7 +66,12 @@ def buscar_voos(requisicao: RequisicaoBusca) -> RespostaBusca:
     if resultados:
         for item in resultados:
             oferta = mapear_oferta(
-                item, requisicao.origem, requisicao.destino, requisicao.data_partida, configuracoes.MOEDA_PADRAO
+                item,
+                requisicao.origem,
+                requisicao.destino,
+                requisicao.data_partida,
+                configuracoes.MOEDA_PADRAO,
+                data_retorno=requisicao.data_retorno,
             )
             if oferta is not None:
                 ofertas.append(oferta)

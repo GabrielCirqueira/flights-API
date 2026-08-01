@@ -7,16 +7,29 @@ from app.core.config import configuracoes
 from app.schemas.voos import OfertaVooSaida, TrechoVooSaida
 
 
-def url_google_flights(origem: str, destino: str, data_partida: date) -> str:
+def url_google_flights(
+    origem: str,
+    destino: str,
+    data_partida: date,
+    data_retorno: date | None = None,
+) -> str:
+    if data_retorno:
+        query = (
+            f"Flights from {origem} to {destino} on {data_partida.isoformat()} "
+            f"returning {data_retorno.isoformat()}"
+        )
+    else:
+        query = f"Flights from {origem} to {destino} on {data_partida.isoformat()} one way"
+
     parametros = urlencode(
         {
+            "q": query,
             "hl": configuracoes.IDIOMA_PADRAO,
             "gl": configuracoes.PAIS_PADRAO,
             "curr": configuracoes.MOEDA_PADRAO,
         }
     )
-    query = f"Flights to {destino} from {origem} on {data_partida.isoformat()}"
-    return f"https://www.google.com/travel/flights?q={query}&{parametros}".replace(" ", "+")
+    return f"https://www.google.com/travel/flights?{parametros}"
 
 
 def mapear_trecho(trecho) -> TrechoVooSaida:
@@ -46,6 +59,7 @@ def mapear_oferta(
     destino: str,
     data_partida: date,
     moeda: str,
+    data_retorno: date | None = None,
 ) -> OfertaVooSaida | None:
     if isinstance(voo, tuple | list):
         segmentos = [s for s in voo if isinstance(s, FlightResult)]
@@ -85,7 +99,7 @@ def mapear_oferta(
             companhia_principal=comp_principal,
             nome_companhia_principal=outbound.primary_airline_name,
             trechos=todos_trechos,
-            url_busca_google_flights=url_google_flights(origem, destino, data_partida),
+            url_busca_google_flights=url_google_flights(origem, destino, data_partida, data_retorno),
             encontrado_em=datetime.now(timezone.utc),
             fonte="fli",
         )
@@ -103,7 +117,7 @@ def mapear_oferta(
         else str(voo.primary_airline),
         nome_companhia_principal=voo.primary_airline_name,
         trechos=[mapear_trecho(leg) for leg in voo.legs],
-        url_busca_google_flights=url_google_flights(origem, destino, data_partida),
+        url_busca_google_flights=url_google_flights(origem, destino, data_partida, data_retorno),
         encontrado_em=datetime.now(timezone.utc),
         fonte="fli",
     )
