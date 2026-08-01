@@ -32,17 +32,42 @@ def url_google_flights(
     return f"https://www.google.com/travel/flights?{parametros}"
 
 
+def _iata_aeroporto(aeroporto) -> str:
+    if hasattr(aeroporto, "name"):
+        return aeroporto.name
+    return str(aeroporto)
+
+
+def _nome_aeroporto(aeroporto) -> str:
+    if hasattr(aeroporto, "value"):
+        return aeroporto.value
+    return str(aeroporto)
+
+
+def _montar_info_rota(trechos: list[TrechoVooSaida], escalas: int) -> tuple[bool, bool, list[str], list[str]]:
+    if not trechos:
+        return True, False, [], []
+
+    rota_iata = [trechos[0].iata_partida]
+    for trecho in trechos:
+        rota_iata.append(trecho.iata_chegada)
+
+    direto = escalas == 0 and len(trechos) == 1
+    com_conexao = not direto
+    aeroportos_conexao = rota_iata[1:-1] if len(rota_iata) > 2 else []
+
+    return direto, com_conexao, rota_iata, aeroportos_conexao
+
+
 def mapear_trecho(trecho) -> TrechoVooSaida:
     return TrechoVooSaida(
+        iata_partida=_iata_aeroporto(trecho.departure_airport),
+        iata_chegada=_iata_aeroporto(trecho.arrival_airport),
+        aeroporto_partida=_nome_aeroporto(trecho.departure_airport),
+        aeroporto_chegada=_nome_aeroporto(trecho.arrival_airport),
         companhia_aerea=trecho.airline.value if hasattr(trecho.airline, "value") else str(trecho.airline),
         nome_companhia_aerea=getattr(trecho, "airline_name", None),
         numero_voo=trecho.flight_number,
-        aeroporto_partida=trecho.departure_airport.value
-        if hasattr(trecho.departure_airport, "value")
-        else str(trecho.departure_airport),
-        aeroporto_chegada=trecho.arrival_airport.value
-        if hasattr(trecho.arrival_airport, "value")
-        else str(trecho.arrival_airport),
         data_hora_partida=trecho.departure_datetime,
         data_hora_chegada=trecho.arrival_datetime,
         duracao_minutos=trecho.duration,
@@ -84,6 +109,7 @@ def mapear_oferta(
 
         duracao_total = sum(seg.duration for seg in segmentos if seg.duration)
         escalas_totais = sum(seg.stops for seg in segmentos if seg.stops is not None)
+        direto, com_conexao, rota_iata, aeroportos_conexao = _montar_info_rota(todos_trechos, escalas_totais)
 
         comp_principal = (
             outbound.primary_airline.value
@@ -96,6 +122,10 @@ def mapear_oferta(
             moeda=outbound.currency or moeda,
             duracao_minutos=duracao_total,
             escalas=escalas_totais,
+            direto=direto,
+            com_conexao=com_conexao,
+            rota_iata=rota_iata,
+            aeroportos_conexao=aeroportos_conexao,
             companhia_principal=comp_principal,
             nome_companhia_principal=outbound.primary_airline_name,
             trechos=todos_trechos,
@@ -107,16 +137,23 @@ def mapear_oferta(
     if voo.price is None or float(voo.price) <= 0.0:
         return None
 
+    trechos = [mapear_trecho(leg) for leg in voo.legs]
+    direto, com_conexao, rota_iata, aeroportos_conexao = _montar_info_rota(trechos, voo.stops)
+
     return OfertaVooSaida(
         preco=float(voo.price),
         moeda=voo.currency or moeda,
         duracao_minutos=voo.duration,
         escalas=voo.stops,
+        direto=direto,
+        com_conexao=com_conexao,
+        rota_iata=rota_iata,
+        aeroportos_conexao=aeroportos_conexao,
         companhia_principal=voo.primary_airline.value
         if hasattr(voo.primary_airline, "value")
         else str(voo.primary_airline),
         nome_companhia_principal=voo.primary_airline_name,
-        trechos=[mapear_trecho(leg) for leg in voo.legs],
+        trechos=trechos,
         url_busca_google_flights=url_google_flights(origem, destino, data_partida, data_retorno),
         encontrado_em=datetime.now(timezone.utc),
         fonte="fli",

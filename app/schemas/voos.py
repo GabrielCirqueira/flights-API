@@ -86,11 +86,13 @@ class RequisicaoBuscaPorLocal(BaseModel):
 
 
 class TrechoVooSaida(BaseModel):
+    iata_partida: str
+    iata_chegada: str
+    aeroporto_partida: str
+    aeroporto_chegada: str
     companhia_aerea: str
     nome_companhia_aerea: str | None = None
     numero_voo: str | None = None
-    aeroporto_partida: str
-    aeroporto_chegada: str
     data_hora_partida: datetime
     data_hora_chegada: datetime
     duracao_minutos: int | None = None
@@ -103,6 +105,10 @@ class OfertaVooSaida(BaseModel):
     moeda: str
     duracao_minutos: int
     escalas: int
+    direto: bool
+    com_conexao: bool
+    rota_iata: list[str]
+    aeroportos_conexao: list[str]
     companhia_principal: str
     nome_companhia_principal: str | None = None
     trechos: list[TrechoVooSaida]
