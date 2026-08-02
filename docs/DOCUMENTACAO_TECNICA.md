@@ -13,6 +13,7 @@ Microsserviço HTTP em **Python 3.10+ / FastAPI** que expõe busca de voos e con
 | **Busca por janela** | `POST /api/v1/buscar/janela` — preço mínimo por dia em um intervalo; opcionalmente expande as datas mais baratas. |
 | **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA, testa combinações em paralelo e retorna **todas as ofertas** ordenadas por preço. |
 | **Catálogo de aeroportos** | `GET /api/v1/aeroportos` — autocomplete e filtros; `GET /api/v1/aeroportos/{iata}` — detalhe por código. |
+| **Catálogo de cidades** | `GET /api/v1/cidades` ou `/api/v1/cities` — autocomplete e busca exclusiva de cidades e estados (UF). |
 
 **Contrato da API:** campos JSON, rotas e DTOs em **português (PT-BR)**. Horários de voo (`data_hora_partida`, `data_hora_chegada`) são **naive** (horário local do aeroporto, sem timezone/`Z`).
 
@@ -72,7 +73,7 @@ Ponto de entrada da aplicação Uvicorn (`app.main:app`).
 - Instancia `FastAPI` com nome e versão de `configuracoes`.
 - Registra middleware de rastreamento/autenticação.
 - Registra handler global de `HTTPException`.
-- Inclui os roteadores: `saude`, `buscar`, `aeroportos`.
+- Inclui os roteadores: `saude`, `buscar`, `aeroportos`, `cidades`.
 
 ### 4.2. `app/core/` — infraestrutura
 
@@ -89,6 +90,7 @@ Validação e serialização com **Pydantic v2**. Separação por domínio:
 | Arquivo | Conteúdo |
 |---|---|
 | `aeroportos.py` | `AeroportoSaida`, `RespostaListaAeroportos` |
+| `cidades.py` | `CidadeSaida`, `RespostaListaCidades` |
 | `voos.py` | `TipoLocal`, requisições (`RequisicaoBusca*`), respostas, `OfertaVooSaida`, `ParadaRotaSaida`, `TrechoVooSaida`, `OfertaBuscaPorLocalSaida` |
 
 Os routers importam diretamente destes módulos; não há lógica de negócio aqui.
@@ -102,6 +104,7 @@ Camada **fina**: apenas define rotas, tags OpenAPI e delega ao service.
 | `saude.py` | — | `GET /saude` |
 | `buscar.py` | `/api/v1` | `POST /buscar`, `/buscar/janela`, `/buscar/por-local` |
 | `aeroportos.py` | `/api/v1` | `GET /aeroportos`, `/aeroportos/{codigo_iata}` |
+| `cidades.py` | `/api/v1` | `GET /cidades`, `/cities`, `/cidades/buscar`, `/cities/search` |
 
 Documentação interativa: `http://127.0.0.1:12000/docs` (Swagger).
 
@@ -122,6 +125,12 @@ Isola o acoplamento com o pacote `fli`. Se a API do Google Flights mudar, a alte
 | `indice.py` | Pré-computa `INDICE_AEROPORTOS` no startup a partir do enum `Airport` do `fli` (~7.800 aeroportos), com campos normalizados para busca rápida. |
 | `consulta.py` | `listar_aeroportos()` — autocomplete com ranking por relevância; `obter_aeroporto_por_codigo()`. |
 | `resolucao.py` | `resolver_aeroportos_candidatos()` — converte cidade/estado/IATA em lista de códigos (até 3, priorizando aeroportos principais). Usado pela busca por local. |
+
+### 4.7. `app/services/cidades/` — domínio de cidades e estados
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `consulta.py` | Pré-computa `INDICE_CIDADES` no startup extraindo localidades únicas do índice de aeroportos; `listar_cidades()` — autocomplete por nome de cidade ou UF. |
 
 ### 4.7. `app/services/voos/` — domínio de busca de voos
 
