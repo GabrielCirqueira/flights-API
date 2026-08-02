@@ -1,11 +1,12 @@
 import logging
 
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import configuracoes
 from app.core.exceptions import tratar_excecao_http
 from app.core.middleware import rastreamento_e_autenticacao
-from app.routers import aeroportos, buscar, saude
+from app.routers import aeroportos, buscar, cidades, saude
 
 logging.basicConfig(level=logging.INFO)
 
@@ -16,9 +17,23 @@ app = FastAPI(
     "(acesso direto à API interna do Google Flights, sem HTML parsing).",
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:8010",
+        "http://localhost:8010",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.middleware("http")(rastreamento_e_autenticacao)
 app.exception_handler(HTTPException)(tratar_excecao_http)
 
 app.include_router(saude.roteador)
 app.include_router(buscar.roteador)
 app.include_router(aeroportos.roteador)
+app.include_router(cidades.roteador)
