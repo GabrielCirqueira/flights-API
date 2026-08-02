@@ -11,7 +11,6 @@ from app.schemas.voos import (
     DataPrecoSaida,
     OfertaVooSaida,
     RequisicaoBusca,
-    RequisicaoBuscaAberta,
     RequisicaoBuscaJanela,
     RespostaBuscaJanela,
 )
@@ -153,16 +152,3 @@ def buscar_janela(requisicao: RequisicaoBuscaJanela) -> RespostaBuscaJanela:
         por_data=por_data,
         mais_baratas_expandidas=mais_baratas_expandidas,
     )
-
-
-def buscar_aberta(requisicao: RequisicaoBuscaAberta) -> RespostaBuscaJanela:
-    janela = RequisicaoBuscaJanela(
-        origem=requisicao.origem,
-        destino=requisicao.destino,
-        janela_dias=requisicao.janela_dias,
-        adultos=requisicao.adultos,
-        classe_cabine=requisicao.classe_cabine,
-        maximo_escalas=requisicao.maximo_escalas,
-        expandir_top=requisicao.expandir_top,
-    )
-    return buscar_janela(janela)

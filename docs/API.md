@@ -14,11 +14,12 @@ Microsserviço HTTP (FastAPI) que conecta o Voo Barato (Symfony, apps) ao Google
 ## Índice
 
 1. [Convenções gerais](#convenções-gerais)
-2. [Campos opcionais e padrões](#campos-opcionais-e-padrões)
-3. [Erros e códigos HTTP](#erros-e-códigos-http)
-4. [Enums aceitos](#enums-aceitos)
-5. [Modelos de resposta compartilhados](#modelos-de-resposta-compartilhados)
-6. [Endpoints](#endpoints)
+2. [Busca aberta — como ler a resposta](#busca-aberta--como-ler-a-resposta)
+3. [Campos opcionais e padrões](#campos-opcionais-e-padrões)
+4. [Erros e códigos HTTP](#erros-e-códigos-http)
+5. [Enums aceitos](#enums-aceitos)
+6. [Modelos de resposta compartilhados](#modelos-de-resposta-compartilhados)
+7. [Endpoints](#endpoints)
    - [GET /saude](#get-saude)
    - [POST /api/v1/buscar](#post-apiv1buscar)
    - [POST /api/v1/buscar/janela](#post-apiv1buscarjanela)
@@ -27,7 +28,7 @@ Microsserviço HTTP (FastAPI) que conecta o Voo Barato (Symfony, apps) ao Google
    - [GET /api/v1/aeroportos](#get-apiv1aeroportos)
    - [GET /api/v1/aeroportos/{codigo_iata}](#get-apiv1aeroportoscodigo_iata)
    - [GET /api/v1/cidades](#get-apiv1cidades)
-7. [Exemplos de integração](#exemplos-de-integração)
+8. [Exemplos de integração](#exemplos-de-integração)
 
 ---
 
@@ -62,9 +63,9 @@ X-Internal-Token: voobarato_secret_token_12345
 |---|---|
 | Health check / Docker | `GET /saude` |
 | Mostrar preço ao usuário em **data exata** | `POST /api/v1/buscar` |
-| Heatmap / alerta por **intervalo de datas** | `POST /api/v1/buscar/janela` |
-| Alerta **sem data** — explorar próximos N dias (IATA) | `POST /api/v1/buscar/aberta` |
-| Usuário digitou **cidade ou estado** (com ou **sem** data) | `POST /api/v1/buscar/por-local` |
+| Alerta **sem data** — explorar próximos N dias (cidade/estado) | `POST /api/v1/buscar/aberta` |
+| Busca por local com **data fixa** ou sem data (mesmo comportamento) | `POST /api/v1/buscar/por-local` |
+| Heatmap por IATA em intervalo ou sem datas | `POST /api/v1/buscar/janela` |
 | Autocomplete de aeroportos | `GET /api/v1/aeroportos` |
 | Autocomplete exclusivo de cidades/estados | `GET /api/v1/cidades` ou `GET /api/v1/cities` |
 
@@ -75,6 +76,115 @@ X-Internal-Token: voobarato_secret_token_12345
 | `OPEN_SEARCH_WINDOW_DAYS` | `90` | Dias escaneados quando nenhuma data é informada (hoje → hoje+N) |
 
 A janela **se desloca automaticamente** a cada requisição — não é um mês fixo. Ideal para alertas recorrentes via cron.
+
+---
+
+## Busca aberta — como ler a resposta
+
+Endpoints afetados: **`POST /api/v1/buscar/aberta`** e **`POST /api/v1/buscar/por-local`** (sem `data_partida`).
+
+A resposta tem **duas camadas**. Não confunda resumo com voo completo.
+
+### Camada 1 — `por_data[]` (calendário)
+
+Lista **uma entrada por dia** dentro da janela, com o **menor preço** daquele dia (melhor par IATA entre origem × destino).
+
+| Campo | O que é | Serve para |
+|---|---|---|
+| `data` | Dia ISO (`2026-09-01`) | Mostrar no calendário / WhatsApp |
+| `preco` | Menor preço do dia | Comparar datas rapidamente |
+| `moeda` | Ex: `BRL` | Exibição |
+| `aeroporto_origem_iata` | IATA origem do par vencedor | Saber qual aeroporto saiu mais barato |
+| `aeroporto_destino_iata` | IATA destino do par vencedor | Idem destino |
+| `oferta` | **Objeto completo do voo** ou `null` | Detalhes, link, trechos, cidades |
+
+> **`por_data` sozinho (sem `oferta`)** = só calendário de preços. Isso acontece quando `expandir_top: 0`.
+
+### Camada 2 — `oferta` dentro de `por_data[]` e lista `ofertas[]`
+
+Quando a API **expande** uma data, busca o voo real naquele dia e preenche `oferta` com o mesmo JSON da busca por data fixa:
+
+- `trechos[]` — horários, aeroportos, número do voo
+- `rota_iata[]` — rota com **IATA + nome da cidade**
+- `aeroportos_conexao[]` — hubs de escala
+- `url_busca_google_flights` — link direto pro Google Flights
+- `direto`, `com_conexao`, `escalas`, `companhia_principal`, etc.
+
+`ofertas[]` é a **mesma informação em lista plana** — um item por data expandida, ordenado por preço.  
+`melhor_oferta` = atalho para o item mais barato de `ofertas[]`.
+
+```
+por_data[0].oferta  ≈  ofertas[0]   (mesmo schema OfertaBuscaPorLocalSaida)
+```
+
+### Parâmetro `expandir_top` — o que controla
+
+| Valor enviado | Comportamento | `por_data[].oferta` | `ofertas[]` |
+|---|---|---|---|
+| **omitido** (`null`) | Expande **todas** as datas da janela | Preenchido em cada dia | Todas as ofertas |
+| `0` | Só calendário, **sem** buscar voos | sempre `null` | `[]` |
+| `5` | Expande só as **5 datas mais baratas** | preenchido nos 5 primeiros; resto `null` | 5 ofertas |
+| `30` | Expande as 30 datas mais baratas | idem | até 30 ofertas |
+
+> Janela de 90 dias com `expandir_top` omitido = até **90 consultas** ao Google Flights (mais lento). Para cron rápido, use `expandir_top: 10` ou `0` + notificação só com preço/data.
+
+### Qual campo usar no Symfony / WhatsApp?
+
+| Necessidade | Campo |
+|---|---|
+| Listar datas e preços no alerta | `por_data[].data` + `por_data[].preco` |
+| Link, horário, companhia, rota com cidades | `por_data[].oferta` ou `ofertas[]` |
+| Melhor opção geral | `melhor_oferta` |
+| Milhas | Calcular no Symfony sobre `oferta.preco` |
+
+### Exemplo visual da estrutura
+
+```json
+{
+  "modo_busca": "aberta",
+  "data_inicio": "2026-08-02",
+  "data_fim": "2026-11-01",
+  "janela_dias": 90,
+  "por_data": [
+    {
+      "data": "2026-09-01",
+      "preco": 400.0,
+      "moeda": "BRL",
+      "aeroporto_origem_iata": "VIX",
+      "aeroporto_destino_iata": "CWB",
+      "oferta": {
+        "preco": 400.0,
+        "moeda": "BRL",
+        "direto": false,
+        "com_conexao": true,
+        "rota_iata": [
+          { "iata": "VIX", "cidade": "Vitória" },
+          { "iata": "GRU", "cidade": "São Paulo" },
+          { "iata": "CWB", "cidade": "Curitiba" }
+        ],
+        "aeroportos_conexao": [{ "iata": "GRU", "cidade": "São Paulo" }],
+        "url_busca_google_flights": "https://www.google.com/travel/flights?q=...",
+        "trechos": [{ "iata_partida": "VIX", "data_hora_partida": "2026-09-01T18:40:00", "...": "..." }],
+        "aeroporto_origem_iata": "VIX",
+        "aeroporto_destino_iata": "CWB"
+      }
+    },
+    {
+      "data": "2026-09-02",
+      "preco": 420.0,
+      "moeda": "BRL",
+      "aeroporto_origem_iata": "VIX",
+      "aeroporto_destino_iata": "CWB",
+      "oferta": null
+    }
+  ],
+  "ofertas": [ "...mesma oferta de por_data[0].oferta..." ],
+  "total": 1,
+  "melhor_oferta": { "...": "..." }
+}
+```
+
+No exemplo acima, `por_data[1].oferta` é `null` porque só a data `2026-09-01` foi expandida (`expandir_top: 1`). Com `expandir_top` omitido, **todas** teriam `oferta` preenchida.
 
 ---
 
@@ -90,8 +200,10 @@ Regra geral para todos os POST:
 | IATA com minúsculas (`"vix"`) | Normalizado para maiúsculas (`"VIX"`) |
 | Enum desconhecido (`maximo_escalas: "DIRECT"`) | Ignorado silenciosamente — cai no fallback `"ANY"` |
 | Data inválida (`"10/08/2026"`) | `422` — formato deve ser `YYYY-MM-DD` |
+| `expandir_top` omitido em `/aberta` ou `/por-local` | Expande **todas** as datas — `por_data[].oferta` + `ofertas[]` completos |
+| `expandir_top: 0` em `/aberta` ou `/por-local` | Só calendário — `por_data` sem voo, `ofertas: []` |
 | `data_partida` omitida em `/por-local` | Modo **aberto** — escaneia próximos N dias |
-| `data_inicio`/`data_fim` omitidas em `/janela` | Modo **aberto** — mesmo comportamento de `/buscar/aberta` |
+| `data_inicio`/`data_fim` omitidas em `/janela` | Modo aberto por **IATA** — hoje → hoje+N |
 | `data_retorno` sem `data_partida` em `/por-local` | `422` — retorno exige ida |
 
 ---
@@ -209,7 +321,7 @@ Exemplo — rota sem voo direto com `maximo_escalas: "NON_STOP"`:
 
 ### `OfertaVooSaida`
 
-Presente em `/buscar`, `/buscar/janela` (`mais_baratas_expandidas`) e `/buscar/por-local` (`ofertas`).
+Presente em `/buscar`, `/buscar/janela` (`mais_baratas_expandidas`), `/buscar/por-local` e `/buscar/aberta` (`ofertas[]` e `por_data[].oferta`).
 
 | Campo | Tipo | Descrição |
 |---|---|---|
@@ -428,7 +540,7 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar \
 
 Preço **mínimo por dia** em um intervalo. Ideal para alertas e calendário de preços.
 
-Também aceita **modo aberto** (sem datas) — equivalente a `/buscar/aberta`.
+Também aceita **modo aberto** (sem datas) por IATA — use `/buscar/aberta` se a origem/destino forem **cidade/estado**.
 
 **Não use** para exibir "preço agora" ao usuário sem expandir a data vencedora via `/buscar`.
 
@@ -557,9 +669,11 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/janela \
 
 ### POST /api/v1/buscar/aberta
 
-Atalho explícito para **busca sem data** por IATA. Retorna o mesmo schema de `/buscar/janela` com `modo_busca: "aberta"`.
+Atalho para **busca sem data por cidade, estado ou aeroporto** — mesmo contrato de entrada que `/buscar/por-local`, mas **sem** `data_partida`.
 
-Use para **alertas recorrentes** em que o usuário não definiu data de ida nem volta — o cron consulta periodicamente e notifica datas/preços encontrados.
+Equivalente a chamar `/buscar/por-local` omitindo a data. Retorna `RespostaBuscaPorLocal` com `modo_busca: "aberta"`.
+
+Use para **alertas recorrentes** em que o usuário configurou rota por nome de cidade, sem data de ida nem volta.
 
 #### Requisição mínima
 
@@ -567,21 +681,40 @@ Use para **alertas recorrentes** em que o usuário não definiu data de ida nem 
 curl -X POST http://127.0.0.1:12000/api/v1/buscar/aberta \
   -H "Content-Type: application/json" \
   -d '{
-    "origem": "VIX",
-    "destino": "GRU"
+    "origem_valor": "Vitória",
+    "destino_valor": "Goiânia"
   }'
 ```
 
-**Comportamento:** escaneia 90 dias (padrão), expande as 5 datas mais baratas (`expandir_top` padrão = `5`).
+**Comportamento:** resolve aeroportos, escaneia 90 dias (padrão), expande **todas** as datas com oferta completa (`expandir_top` omitido).
 
-#### Só calendário de preços (sem expandir ofertas)
+> Ver [Busca aberta — como ler a resposta](#busca-aberta--como-ler-a-resposta) para entender `por_data` vs `oferta` vs `ofertas[]`.
+
+#### Só calendário (rápido, sem detalhes do voo)
 
 ```bash
 curl -X POST http://127.0.0.1:12000/api/v1/buscar/aberta \
   -H "Content-Type: application/json" \
   -d '{
-    "origem": "VIX",
-    "destino": "GRU",
+    "origem_valor": "Vitória",
+    "destino_valor": "Curitiba",
+    "janela_dias": 30,
+    "expandir_top": 0
+  }'
+```
+
+Retorna `por_data[]` com data/preço/IATA — **`oferta: null`** em todos, **`ofertas: []`**.
+
+#### Por estado
+
+```bash
+curl -X POST http://127.0.0.1:12000/api/v1/buscar/aberta \
+  -H "Content-Type: application/json" \
+  -d '{
+    "origem_tipo": "estado",
+    "origem_valor": "Espírito Santo",
+    "destino_tipo": "estado",
+    "destino_valor": "GO",
     "janela_dias": 60,
     "expandir_top": 0
   }'
@@ -591,45 +724,29 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/aberta \
 
 | Campo | Tipo | Obrig. | Padrão | Se omitir | Se inválido |
 |---|---|---|---|---|---|
-| `origem` | `string` | **Sim** | — | `422` | IATA inválido → `422` |
-| `destino` | `string` | **Sim** | — | `422` | IATA inválido → `422` |
-| `janela_dias` | `int` | Não | `90` (env) | Usa `OPEN_SEARCH_WINDOW_DAYS` | 1–180 → `422` |
+| `origem_tipo` | `string` | Não | `"cidade"` | Assume cidade | Enum inválido → `422` |
+| `origem_valor` | `string` | **Sim** | — | `422` | Cidade/estado sem aeroporto → `422` |
+| `destino_tipo` | `string` | Não | `"cidade"` | Assume cidade | — |
+| `destino_valor` | `string` | **Sim** | — | `422` | Sem aeroporto → `422` |
+| `janela_dias` | `int` | Não | `90` (env) | Usa `OPEN_SEARCH_WINDOW_DAYS` | 1–180 |
 | `adultos` | `int` | Não | `1` | 1 adulto | 1–9 |
 | `classe_cabine` | `string` | Não | `"ECONOMY"` | Econômica | — |
 | `maximo_escalas` | `string` | Não | `"ANY"` | Aceita conexões | — |
-| `expandir_top` | `int` | Não | `5` | Expande 5 datas | `0` = só `por_data`; max `10` |
+| `expandir_top` | `int\|null` | Não | `null` (todas) | Expande **todas** as datas | `0` = só resumo; `N` = top N; max `180` |
+
+Valores de `origem_tipo` / `destino_tipo`: `"cidade"`, `"estado"`, `"aeroporto"` (IATA em `*_valor`).
 
 #### Resposta `200`
 
-Mesmo formato de [POST /api/v1/buscar/janela](#post-apiv1buscarjanela). Sempre `modo_busca: "aberta"`.
+Mesmo formato de [POST /api/v1/buscar/por-local](#post-apiv1buscarpor-local) no modo aberto (`modo_busca: "aberta"`).
 
-```json
-{
-  "origem": "VIX",
-  "destino": "GRU",
-  "data_inicio": "2026-08-02",
-  "data_fim": "2026-11-01",
-  "moeda": "BRL",
-  "modo_busca": "aberta",
-  "janela_dias": 90,
-  "por_data": [
-    { "data": "2026-08-09", "preco": 452.0, "moeda": "BRL" }
-  ],
-  "mais_baratas_expandidas": [
-    {
-      "preco": 452.0,
-      "direto": true,
-      "rota_iata": [
-        { "iata": "VIX", "cidade": "Vitória" },
-        { "iata": "GRU", "cidade": "São Paulo" }
-      ],
-      "trechos": ["..."]
-    }
-  ]
-}
-```
+| Onde está o quê | Campo |
+|---|---|
+| Calendário dia a dia | `por_data[]` |
+| Voo completo (link, trechos, cidades) | `por_data[].oferta` ou `ofertas[]` |
+| Melhor preço geral | `melhor_oferta` |
 
-> **Integração Symfony (alertas):** iterar `por_data[]` para montar notificação WhatsApp/painel com data + preço. Milhas são calculadas no Symfony sobre o `preco` retornado.
+Documentação detalhada: [Busca aberta — como ler a resposta](#busca-aberta--como-ler-a-resposta).
 
 ---
 
@@ -641,8 +758,8 @@ Suporta dois modos via `modo_busca` na resposta:
 
 | Modo | Quando | O que retorna |
 |---|---|---|
-| `data_fixa` | `data_partida` informada | Ofertas completas na data |
-| `aberta` | `data_partida` omitida/`null` | Calendário `por_data[]` + ofertas expandidas das melhores datas |
+| `data_fixa` | `data_partida` informada | `ofertas[]` com todos os voos na data — **sem** `por_data` |
+| `aberta` | `data_partida` omitida/`null` | `por_data[]` (calendário) + `por_data[].oferta` (voo completo) + `ofertas[]` |
 
 #### Fluxo interno — modo `data_fixa`
 
@@ -657,7 +774,7 @@ Suporta dois modos via `modo_busca` na resposta:
 1. Resolve aeroportos (igual acima)
 2. Para cada par IATA, consulta preço mínimo por dia na janela (hoje → hoje+N)
 3. Consolida `por_data[]` — por data, fica o par mais barato
-4. Expande as N datas mais baratas (`expandir_top`) com oferta completa
+4. Expande cada data (`expandir_top`) com **oferta completa** em `por_data[].oferta` e `ofertas[]`
 
 #### Requisição mínima (cidade → cidade, data fixa)
 
@@ -686,8 +803,15 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
   }'
 ```
 
-**Se omitir `data_partida`:** modo aberto — não envie `data_retorno`.  
-**Resposta:** `modo_busca: "aberta"`, `por_data[]` com `{ data, preco, aeroporto_origem_iata, aeroporto_destino_iata }`.
+**Se omitir `data_partida`:** modo aberto — não envie `data_retorno`.
+
+| Campo | Conteúdo |
+|---|---|
+| `por_data[]` | Uma linha por dia: `data`, `preco`, IATAs + `oferta` (voo completo ou `null`) |
+| `ofertas[]` | Lista plana das ofertas expandidas (mesmo JSON de `por_data[].oferta`) |
+| `total` | Quantidade de itens em `ofertas[]` |
+
+Controle de expansão: [`expandir_top`](#busca-aberta--como-ler-a-resposta).
 
 #### Busca por estado
 
@@ -729,7 +853,7 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
 | `data_partida` | `string` | Não | `null` | Modo **aberto** | Formato inválido → `422` |
 | `data_retorno` | `string` | Não | `null` | Só ida | Sem `data_partida` → `422`; anterior à ida → `422` |
 | `janela_dias` | `int` | Não | `90` (env) | Usa `OPEN_SEARCH_WINDOW_DAYS` | 1–180; só modo aberto |
-| `expandir_top` | `int` | Não | `5` | Expande 5 datas | 0 = só calendário; max `10`; só modo aberto |
+| `expandir_top` | `int\|null` | Não | `null` (todas) | Expande todas as datas | `0` = só resumo; max `180`; só modo aberto |
 | `adultos` | `int` | Não | `1` | 1 adulto | 1–9 |
 | `criancas` | `int` | Não | `0` | Sem crianças | 0–8; só modo `data_fixa` |
 | `classe_cabine` | `string` | Não | `"ECONOMY"` | Econômica | — |
@@ -774,6 +898,7 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
 | `moeda` | Moeda |
 | `aeroporto_origem_iata` | Par vencedor — origem |
 | `aeroporto_destino_iata` | Par vencedor — destino |
+| `oferta` | `OfertaBuscaPorLocalSaida` completa (`trechos`, `rota_iata`, `url_busca_google_flights`, etc.) ou `null` se não expandida |
 
 `OfertaBuscaPorLocalSaida` = `OfertaVooSaida` + campos:
 
@@ -812,37 +937,43 @@ curl -X POST http://127.0.0.1:12000/api/v1/buscar/por-local \
 }
 ```
 
-Exemplo — modo **aberto**:
+Exemplo — modo **aberto** (com `oferta` expandida):
 
 ```json
 {
   "origem_buscada": "Vitória",
-  "destino_buscado": "São Paulo",
+  "destino_buscado": "Curitiba",
   "modo_busca": "aberta",
-  "data_partida": null,
-  "data_retorno": null,
   "data_inicio": "2026-08-02",
   "data_fim": "2026-11-01",
   "janela_dias": 90,
   "moeda": "BRL",
   "por_data": [
     {
-      "data": "2026-08-06",
-      "preco": 846.0,
+      "data": "2026-09-01",
+      "preco": 400.0,
       "moeda": "BRL",
       "aeroporto_origem_iata": "VIX",
-      "aeroporto_destino_iata": "GRU"
+      "aeroporto_destino_iata": "CWB",
+      "oferta": {
+        "preco": 400.0,
+        "direto": false,
+        "com_conexao": true,
+        "rota_iata": [
+          { "iata": "VIX", "cidade": "Vitória" },
+          { "iata": "CWB", "cidade": "Curitiba" }
+        ],
+        "url_busca_google_flights": "https://www.google.com/travel/flights?q=...",
+        "trechos": ["..."],
+        "aeroporto_origem_iata": "VIX",
+        "aeroporto_destino_iata": "CWB"
+      }
     }
   ],
-  "total": 5,
-  "ofertas": ["..."],
-  "melhor_oferta": { "preco": 846.0, "...": "..." },
-  "aeroporto_origem_usado": "VIX",
-  "aeroporto_destino_usado": "GRU",
-  "todas_combinacoes": [
-    { "origem_iata": "VIX", "destino_iata": "GRU", "preco_minimo": 846.0, "sucesso": true, "mensagem_erro": null },
-    { "origem_iata": "VIX", "destino_iata": "CGH", "preco_minimo": 920.0, "sucesso": true, "mensagem_erro": null }
-  ]
+  "total": 1,
+  "ofertas": ["...igual a por_data[0].oferta..."],
+  "melhor_oferta": { "preco": 400.0, "...": "..." },
+  "todas_combinacoes": ["..."]
 }
 ```
 
@@ -1069,16 +1200,20 @@ $response = $client->post('/api/v1/buscar/por-local', [
 ]);
 $dados = json_decode($response->getBody()->getContents(), true);
 foreach ($dados['por_data'] as $dia) {
-    // $dia['data'], $dia['preco'], $dia['aeroporto_origem_iata']
+    echo $dia['data'] . ' — R$ ' . $dia['preco'];
+    if ($dia['oferta']) {
+        echo $dia['oferta']['url_busca_google_flights'];
+        echo $dia['oferta']['rota_iata'][0]['cidade']; // Vitória
+    }
 }
 
-// Alerta por IATA sem data
+// Alerta sem data — endpoint dedicado
 $response = $client->post('/api/v1/buscar/aberta', [
     'headers' => ['Content-Type' => 'application/json'],
     'json' => [
-        'origem'       => 'VIX',
-        'destino'      => 'GRU',
-        'expandir_top' => 3,
+        'origem_valor'  => 'Vitória',
+        'destino_valor' => 'Goiânia',
+        'expandir_top'  => 3,
     ],
 ]);
 ```
@@ -1103,7 +1238,9 @@ const resposta = await fetch('http://127.0.0.1:12000/api/v1/buscar/por-local', {
 
 const dados = await resposta.json();
 if (dados.modo_busca === 'aberta') {
-  dados.por_data.forEach((dia) => console.log(dia.data, dia.preco));
+  dados.por_data.forEach((dia) => {
+    console.log(dia.data, dia.preco, dia.oferta?.url_busca_google_flights);
+  });
 }
 ```
 

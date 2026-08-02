@@ -7,8 +7,10 @@ from app.core.config import configuracoes
 from app.schemas.voos import (
     CombinacaoVooSaida,
     DataPrecoPorLocalSaida,
+    DataPrecoSaida,
     OfertaBuscaPorLocalSaida,
     RequisicaoBusca,
+    RequisicaoBuscaAberta,
     RequisicaoBuscaPorLocal,
     RespostaBusca,
     RespostaBuscaPorLocal,
@@ -34,6 +36,38 @@ def _executar_busca_par(req_par: RequisicaoBusca) -> tuple[str, str, RespostaBus
         return (req_par.origem, req_par.destino, res, None)
     except Exception as exc:
         return (req_par.origem, req_par.destino, None, exc)
+
+
+def _expandir_oferta_data(
+    dp: DataPrecoPorLocalSaida,
+    adultos: int,
+    classe_cabine: str,
+    maximo_escalas: str,
+) -> OfertaBuscaPorLocalSaida | None:
+    expandidas = _expandir_melhores_datas(
+        dp.aeroporto_origem_iata,
+        dp.aeroporto_destino_iata,
+        [DataPrecoSaida(data=dp.data, preco=dp.preco, moeda=dp.moeda)],
+        1,
+        adultos,
+        classe_cabine,
+        maximo_escalas,
+    )
+    if not expandidas:
+        return None
+    return OfertaBuscaPorLocalSaida(
+        **expandidas[0].model_dump(),
+        aeroporto_origem_iata=dp.aeroporto_origem_iata,
+        aeroporto_destino_iata=dp.aeroporto_destino_iata,
+    )
+
+
+def _limite_expansao(expandir_top: int | None, total_datas: int) -> int:
+    if expandir_top == 0:
+        return 0
+    if expandir_top is None:
+        return total_datas
+    return min(expandir_top, total_datas)
 
 
 def _buscar_por_local_aberta(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaPorLocal:
@@ -111,30 +145,46 @@ def _buscar_por_local_aberta(requisicao: RequisicaoBuscaPorLocal) -> RespostaBus
 
     por_data = sorted(por_data_map.values(), key=lambda item: item.preco)
 
-    ofertas_todas: list[OfertaBuscaPorLocalSaida] = []
-    datas_expandidas: set[str] = set()
-    for dp in por_data[: requisicao.expandir_top]:
-        if dp.data in datas_expandidas:
-            continue
-        datas_expandidas.add(dp.data)
-        expandidas = _expandir_melhores_datas(
-            dp.aeroporto_origem_iata,
-            dp.aeroporto_destino_iata,
-            [dp],
-            1,
-            requisicao.adultos,
-            requisicao.classe_cabine,
-            requisicao.maximo_escalas,
-        )
-        for of in expandidas:
-            ofertas_todas.append(
-                OfertaBuscaPorLocalSaida(
-                    **of.model_dump(),
-                    aeroporto_origem_iata=dp.aeroporto_origem_iata,
-                    aeroporto_destino_iata=dp.aeroporto_destino_iata,
-                )
-            )
+    limite = _limite_expansao(requisicao.expandir_top, len(por_data))
+    datas_expandir = por_data[:limite] if limite > 0 else []
 
+    oferta_por_data: dict[str, OfertaBuscaPorLocalSaida] = {}
+    if datas_expandir:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(datas_expandir), 4)) as executor:
+            futures = {
+                executor.submit(
+                    _expandir_oferta_data,
+                    dp,
+                    requisicao.adultos,
+                    requisicao.classe_cabine,
+                    requisicao.maximo_escalas,
+                ): dp
+                for dp in datas_expandir
+            }
+            for future in concurrent.futures.as_completed(futures):
+                dp = futures[future]
+                oferta = future.result()
+                if oferta:
+                    oferta_por_data[dp.data] = oferta
+
+    por_data_completo: list[DataPrecoPorLocalSaida] = []
+    ofertas_todas: list[OfertaBuscaPorLocalSaida] = []
+    for dp in por_data:
+        oferta = oferta_por_data.get(dp.data)
+        por_data_completo.append(
+            DataPrecoPorLocalSaida(
+                data=dp.data,
+                preco=dp.preco,
+                moeda=dp.moeda,
+                aeroporto_origem_iata=dp.aeroporto_origem_iata,
+                aeroporto_destino_iata=dp.aeroporto_destino_iata,
+                oferta=oferta,
+            )
+        )
+        if oferta:
+            ofertas_todas.append(oferta)
+
+    ofertas_todas.sort(key=lambda item: item.preco)
     melhor = ofertas_todas[0] if ofertas_todas else None
 
     return RespostaBuscaPorLocal(
@@ -145,7 +195,7 @@ def _buscar_por_local_aberta(requisicao: RequisicaoBuscaPorLocal) -> RespostaBus
         data_fim=fim.isoformat(),
         janela_dias=dias,
         moeda=configuracoes.MOEDA_PADRAO,
-        por_data=por_data,
+        por_data=por_data_completo,
         ofertas=ofertas_todas,
         total=len(ofertas_todas),
         melhor_oferta=melhor,
@@ -245,4 +295,20 @@ def buscar_voos_por_local(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaP
         aeroporto_origem_usado=melhor.aeroporto_origem_iata if melhor else None,
         aeroporto_destino_usado=melhor.aeroporto_destino_iata if melhor else None,
         todas_combinacoes=resultados_combinacoes,
+    )
+
+
+def buscar_aberta(requisicao: RequisicaoBuscaAberta) -> RespostaBuscaPorLocal:
+    return buscar_voos_por_local(
+        RequisicaoBuscaPorLocal(
+            origem_tipo=requisicao.origem_tipo,
+            origem_valor=requisicao.origem_valor,
+            destino_tipo=requisicao.destino_tipo,
+            destino_valor=requisicao.destino_valor,
+            janela_dias=requisicao.janela_dias,
+            expandir_top=requisicao.expandir_top,
+            adultos=requisicao.adultos,
+            classe_cabine=requisicao.classe_cabine,
+            maximo_escalas=requisicao.maximo_escalas,
+        )
     )

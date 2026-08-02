@@ -10,8 +10,8 @@ from app.schemas.voos import (
     RespostaBuscaPorLocal,
 )
 from app.services.voos.busca import buscar_voos
-from app.services.voos.busca_janela import buscar_aberta, buscar_janela
-from app.services.voos.busca_por_local import buscar_voos_por_local
+from app.services.voos.busca_janela import buscar_janela
+from app.services.voos.busca_por_local import buscar_aberta, buscar_voos_por_local
 
 roteador = APIRouter(prefix="/api/v1", tags=["buscar"])
 
@@ -26,8 +26,8 @@ def buscar_janela_endpoint(requisicao: RequisicaoBuscaJanela) -> RespostaBuscaJa
     return buscar_janela(requisicao)
 
 
-@roteador.post("/buscar/aberta", response_model=RespostaBuscaJanela)
-def buscar_aberta_endpoint(requisicao: RequisicaoBuscaAberta) -> RespostaBuscaJanela:
+@roteador.post("/buscar/aberta", response_model=RespostaBuscaPorLocal)
+def buscar_aberta_endpoint(requisicao: RequisicaoBuscaAberta) -> RespostaBuscaPorLocal:
     return buscar_aberta(requisicao)
 
 

@@ -11,7 +11,7 @@ Microsserviço HTTP em **Python 3.10+ / FastAPI** que expõe busca de voos e con
 | **Health check** | Endpoint público `/saude` para monitoramento (Docker, Kubernetes, load balancers). |
 | **Busca pontual** | `POST /api/v1/buscar` — voos em data exata (ida ou ida e volta), com ofertas completas. |
 | **Busca por janela** | `POST /api/v1/buscar/janela` — preço mínimo por dia em um intervalo (ou **sem datas** = modo aberto); opcionalmente expande as datas mais baratas. |
-| **Busca aberta** | `POST /api/v1/buscar/aberta` — atalho IATA sem data; escaneia hoje → hoje+N (`OPEN_SEARCH_WINDOW_DAYS`, padrão 90). |
+| **Busca aberta** | `POST /api/v1/buscar/aberta` — alerta sem data por **cidade/estado/IATA**; escaneia hoje → hoje+N. |
 | **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA; com data fixa ou **modo aberto** (sem `data_partida`). |
 | **Catálogo de aeroportos** | `GET /api/v1/aeroportos` — autocomplete e filtros; `GET /api/v1/aeroportos/{iata}` — detalhe por código. |
 | **Catálogo de cidades** | `GET /api/v1/cidades` ou `/api/v1/cities` — autocomplete e busca exclusiva de cidades e estados (UF). |
@@ -182,7 +182,7 @@ Scripts Bash para testes manuais e automação local (não fazem parte do runtim
 | `GET` | `/saude` | Não | Liveness/readiness |
 | `POST` | `/api/v1/buscar` | Sim* | Preço ao vivo para exibir/notificar |
 | `POST` | `/api/v1/buscar/janela` | Sim* | Alertas, heatmap de preços (com ou sem datas) |
-| `POST` | `/api/v1/buscar/aberta` | Sim* | Alertas sem data (IATA) |
+| `POST` | `/api/v1/buscar/aberta` | Sim* | Alertas sem data (cidade/estado) |
 | `POST` | `/api/v1/buscar/por-local` | Sim* | Cidade/estado; data fixa ou modo aberto |
 | `GET` | `/api/v1/aeroportos` | Sim* | Autocomplete / filtros |
 | `GET` | `/api/v1/aeroportos/{iata}` | Sim* | Detalhe de um aeroporto |

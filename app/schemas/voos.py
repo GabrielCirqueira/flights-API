@@ -68,21 +68,15 @@ class RequisicaoBuscaJanela(BaseModel):
 
 
 class RequisicaoBuscaAberta(BaseModel):
-    origem: str = Field(..., min_length=TAMANHO_IATA, max_length=TAMANHO_IATA)
-    destino: str = Field(..., min_length=TAMANHO_IATA, max_length=TAMANHO_IATA)
+    origem_tipo: TipoLocal = TipoLocal.CIDADE
+    origem_valor: str = Field(..., min_length=1, description="ex: Vitória, ES ou VIX")
+    destino_tipo: TipoLocal = TipoLocal.CIDADE
+    destino_valor: str = Field(..., min_length=1, description="ex: São Paulo, SP ou GRU")
     janela_dias: int | None = Field(default=None, ge=1, le=180)
     adultos: int = Field(default=1, ge=1, le=9)
     classe_cabine: str = Field(default="ECONOMY")
     maximo_escalas: str = Field(default="ANY")
-    expandir_top: int = Field(default=5, ge=0, le=10)
-
-    @field_validator("origem", "destino")
-    @classmethod
-    def validar_e_formatar_iata(cls, v: str) -> str:
-        v = v.upper().strip()
-        if not v.isalpha():
-            raise ValueError("código IATA deve ter 3 letras (ex: GRU)")
-        return v
+    expandir_top: int | None = Field(default=None, ge=0, le=180)
 
 
 class RequisicaoBuscaPorLocal(BaseModel):
@@ -93,7 +87,7 @@ class RequisicaoBuscaPorLocal(BaseModel):
     data_partida: date | None = None
     data_retorno: date | None = None
     janela_dias: int | None = Field(default=None, ge=1, le=180)
-    expandir_top: int = Field(default=5, ge=0, le=10)
+    expandir_top: int | None = Field(default=None, ge=0, le=180)
     adultos: int = Field(default=1, ge=1, le=9)
     criancas: int = Field(default=0, ge=0, le=8)
     classe_cabine: str = Field(default="ECONOMY")
@@ -163,11 +157,6 @@ class DataPrecoSaida(BaseModel):
     moeda: str
 
 
-class DataPrecoPorLocalSaida(DataPrecoSaida):
-    aeroporto_origem_iata: str
-    aeroporto_destino_iata: str
-
-
 class RespostaBuscaJanela(BaseModel):
     origem: str
     destino: str
@@ -191,6 +180,12 @@ class CombinacaoVooSaida(BaseModel):
 class OfertaBuscaPorLocalSaida(OfertaVooSaida):
     aeroporto_origem_iata: str
     aeroporto_destino_iata: str
+
+
+class DataPrecoPorLocalSaida(DataPrecoSaida):
+    aeroporto_origem_iata: str
+    aeroporto_destino_iata: str
+    oferta: OfertaBuscaPorLocalSaida | None = None
 
 
 class RespostaBuscaPorLocal(BaseModel):
