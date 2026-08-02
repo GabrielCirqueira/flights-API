@@ -45,6 +45,19 @@ Microsserviço HTTP (FastAPI) que conecta o Voo Barato (Symfony, apps) ao Google
 
 Toda resposta inclui `X-Request-ID` no cabeçalho HTTP (gerado ou repassado).
 
+### CORS
+
+Origens permitidas vêm de **`CORS_ORIGINS`** (URLs extras, vírgula) **+ localhost de dev** (sempre ativos).
+
+| Origem | Quando |
+|---|---|
+| `localhost:8010`, `localhost:3000` | Sempre (dev local) |
+| URLs em `CORS_ORIGINS` | Adicionadas em prod/staging |
+
+```bash
+CORS_ORIGINS=https://seu-dominio.exemplo.com
+```
+
 ### Autenticação
 
 ```http
