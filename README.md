@@ -22,7 +22,7 @@ Basta ter o `python3` instalado e rodar **1 único comando**:
 ```bash
 make dev
 ```
-*O `Makefile` cria automaticamente o ambiente virtual `.venv`, instala todas as dependências necessárias e já inicia o servidor de desenvolvimento na porta **12000** com hot-reload.*
+*O `Makefile` cria automaticamente o ambiente virtual `.venv`, instala todas as dependências necessárias e já inicia o servidor na porta **12000** com hot-reload, escutando em **0.0.0.0** (acessível pelos containers Docker do Voo-Barato). Para só localhost: `make dev HOST=127.0.0.1`.*
 
 ---
 

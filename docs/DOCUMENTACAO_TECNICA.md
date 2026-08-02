@@ -10,8 +10,9 @@ Microsserviço HTTP em **Python 3.10+ / FastAPI** que expõe busca de voos e con
 |---|---|
 | **Health check** | Endpoint público `/saude` para monitoramento (Docker, Kubernetes, load balancers). |
 | **Busca pontual** | `POST /api/v1/buscar` — voos em data exata (ida ou ida e volta), com ofertas completas. |
-| **Busca por janela** | `POST /api/v1/buscar/janela` — preço mínimo por dia em um intervalo; opcionalmente expande as datas mais baratas. |
-| **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA, testa combinações em paralelo e retorna **todas as ofertas** ordenadas por preço. |
+| **Busca por janela** | `POST /api/v1/buscar/janela` — preço mínimo por dia em um intervalo (ou **sem datas** = modo aberto); opcionalmente expande as datas mais baratas. |
+| **Busca aberta** | `POST /api/v1/buscar/aberta` — atalho IATA sem data; escaneia hoje → hoje+N (`OPEN_SEARCH_WINDOW_DAYS`, padrão 90). |
+| **Busca por localidade** | `POST /api/v1/buscar/por-local` — resolve cidade/estado/IATA; com data fixa ou **modo aberto** (sem `data_partida`). |
 | **Catálogo de aeroportos** | `GET /api/v1/aeroportos` — autocomplete e filtros; `GET /api/v1/aeroportos/{iata}` — detalhe por código. |
 | **Catálogo de cidades** | `GET /api/v1/cidades` ou `/api/v1/cities` — autocomplete e busca exclusiva de cidades e estados (UF). |
 
@@ -102,7 +103,7 @@ Camada **fina**: apenas define rotas, tags OpenAPI e delega ao service.
 | Arquivo | Prefixo | Endpoints |
 |---|---|---|
 | `saude.py` | — | `GET /saude` |
-| `buscar.py` | `/api/v1` | `POST /buscar`, `/buscar/janela`, `/buscar/por-local` |
+| `buscar.py` | `/api/v1` | `POST /buscar`, `/buscar/janela`, `/buscar/aberta`, `/buscar/por-local` |
 | `aeroportos.py` | `/api/v1` | `GET /aeroportos`, `/aeroportos/{codigo_iata}` |
 | `cidades.py` | `/api/v1` | `GET /cidades`, `/cities`, `/cidades/buscar`, `/cities/search` |
 
@@ -180,8 +181,9 @@ Scripts Bash para testes manuais e automação local (não fazem parte do runtim
 |---|---|---|---|
 | `GET` | `/saude` | Não | Liveness/readiness |
 | `POST` | `/api/v1/buscar` | Sim* | Preço ao vivo para exibir/notificar |
-| `POST` | `/api/v1/buscar/janela` | Sim* | Alertas, heatmap de preços |
-| `POST` | `/api/v1/buscar/por-local` | Sim* | Usuário informa cidade em vez de IATA |
+| `POST` | `/api/v1/buscar/janela` | Sim* | Alertas, heatmap de preços (com ou sem datas) |
+| `POST` | `/api/v1/buscar/aberta` | Sim* | Alertas sem data (IATA) |
+| `POST` | `/api/v1/buscar/por-local` | Sim* | Cidade/estado; data fixa ou modo aberto |
 | `GET` | `/api/v1/aeroportos` | Sim* | Autocomplete / filtros |
 | `GET` | `/api/v1/aeroportos/{iata}` | Sim* | Detalhe de um aeroporto |
 
@@ -201,6 +203,9 @@ Tuplas `(voo_ida, voo_volta)` do `fli` viram **uma única** `OfertaVooSaida` com
 
 ### Janela vs data exata
 `/buscar/janela` retorna preço por dia em `por_data`. Para exibir ao usuário, expandir a data vencedora com `/buscar` — nunca usar o mínimo da janela como preço de um dia específico sem expansão.
+
+### Busca aberta (sem data)
+Quando `data_inicio`/`data_fim` são omitidos (`/janela`) ou `data_partida` é omitida (`/por-local`), a API calcula automaticamente o intervalo **hoje → hoje + N dias** (`OPEN_SEARCH_WINDOW_DAYS`, padrão 90). A resposta inclui `modo_busca: "aberta"` e `por_data[]` para alimentar alertas recorrentes.
 
 ### Escalas e conexões
 `maximo_escalas` padrão é `"ANY"`. O Google Flights monta itinerários com escala automaticamente em rotas sem voo direto (ex: VIX→GYN via VCP). Cada oferta expõe `direto`, `com_conexao`, `rota_iata` e `aeroportos_conexao`.

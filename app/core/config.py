@@ -12,6 +12,8 @@ class Configuracoes:
 
     TIMEOUT_REQUISICAO_SEGUNDOS: float = float(os.getenv("REQUEST_TIMEOUT_SECONDS", "20"))
 
+    JANELA_BUSCA_ABERTA_DIAS: int = int(os.getenv("OPEN_SEARCH_WINDOW_DAYS", "90"))
+
     TOKEN_INTERNO: str | None = os.getenv("FLIGHTS_API_INTERNAL_TOKEN")
 
 configuracoes = Configuracoes()

@@ -1,4 +1,4 @@
-.PHONY: help install dev-install run dev lint format docker-build docker-run clean cli-saude cli-buscar cli-buscar-janela
+.PHONY: help install dev-install run dev stop lint format docker-build docker-run clean cli-saude cli-buscar cli-buscar-janela
 
 VENV = .venv
 PYTHON = $(VENV)/bin/python3
@@ -7,13 +7,14 @@ UVICORN = $(VENV)/bin/uvicorn
 RUFF = $(VENV)/bin/ruff
 
 PORT ?= 12000
-HOST ?= 127.0.0.1
+HOST ?= 0.0.0.0
 
 help:
 	@echo "======================================================================"
 	@echo "              VOO BARATO - FLIGHTS API - MAKEFILE                     "
 	@echo "======================================================================"
 	@echo "  make dev                Cria venv, instala dependências e sobe a API em dev"
+	@echo "  make stop               Encerra uvicorn na porta $(PORT)"
 	@echo "  make run                Cria venv, instala prod e sobe a API em produção"
 	@echo "  make lint               Executa verificação de linting com Ruff"
 	@echo "  make format             Formata o código-fonte com Ruff"
@@ -31,10 +32,14 @@ install: $(VENV)
 dev-install: $(VENV)
 	$(PIP) install -r requirements.txt -r requirements-dev.txt
 
-run: install
+run: install stop
 	$(UVICORN) app.main:app --host $(HOST) --port $(PORT) --workers 2
 
-dev: dev-install
+stop:
+	@pgrep -f '[.]venv/bin/[u]vicorn app.main:app' 2>/dev/null | xargs -r kill 2>/dev/null || true
+	@sleep 0.5
+
+dev: dev-install stop
 	$(UVICORN) app.main:app --host $(HOST) --port $(PORT) --reload
 
 lint: dev-install
