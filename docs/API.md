@@ -39,7 +39,7 @@ Microsserviço HTTP (FastAPI) que conecta o Voo Barato (Symfony, apps) ao Google
 | Cabeçalho | Obrigatório | Rotas | Descrição |
 |---|---|---|---|
 | `Content-Type: application/json` | Sim (POST) | Todas POST | Corpo sempre JSON |
-| `X-Internal-Token` | Condicional | `/api/v1/*` | Obrigatório **somente se** `FLIGHTS_API_INTERNAL_TOKEN` estiver definido no servidor |
+| `X-Internal-Token` | Condicional | Rotas de **busca** | Obrigatório **somente se** `FLIGHTS_API_INTERNAL_TOKEN` estiver definido |
 | `X-Request-ID` | Não | Todas | ID de correlação enviado pelo cliente; se omitido, a API gera um UUID |
 | `X-Correlation-ID` | Não | Todas | Alias aceito no lugar de `X-Request-ID` |
 
@@ -66,9 +66,9 @@ X-Internal-Token: voobarato_secret_token_12345
 
 | Cenário | Comportamento |
 |---|---|
-| Token configurado no servidor + header ausente/errado | `401` → `{"error": "nao_autorizado"}` |
-| Token **não** configurado no servidor (dev local) | Rotas `/api/v1/*` ficam abertas |
-| Rota `/saude` | Sempre pública, ignora token |
+| Token configurado + header ausente/errado em rota protegida | `401` → `{"error": "nao_autorizado"}` |
+| Token **não** configurado no servidor (dev local) | Rotas protegidas ficam abertas |
+| Rotas públicas (sem token) | `/saude`, `/api/v1/aeroportos`, `/api/v1/aeroportos/{iata}`, `/api/v1/cidades`, `/api/v1/cities` |
 
 ### Qual endpoint usar?
 

@@ -187,7 +187,7 @@ Scripts Bash para testes manuais e automação local (não fazem parte do runtim
 | `GET` | `/api/v1/aeroportos` | Sim* | Autocomplete / filtros |
 | `GET` | `/api/v1/aeroportos/{iata}` | Sim* | Detalhe de um aeroporto |
 
-\* Obrigatório quando `FLIGHTS_API_INTERNAL_TOKEN` está definido no ambiente.
+\* Obrigatório quando `FLIGHTS_API_INTERNAL_TOKEN` está definido — **exceto** `/saude`, `/api/v1/aeroportos*`, `/api/v1/cidades*`, `/api/v1/cities*`.
 
 Payloads completos: [`docs/API.md`](./API.md).
 

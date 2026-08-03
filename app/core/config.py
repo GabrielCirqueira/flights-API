@@ -1,6 +1,9 @@
 
 import os
 
+from dotenv import load_dotenv
+
+load_dotenv()
 
 _ORIGENS_DEV = [
     "http://127.0.0.1:8010",
@@ -34,7 +37,8 @@ class Configuracoes:
 
     JANELA_BUSCA_ABERTA_DIAS: int = int(os.getenv("OPEN_SEARCH_WINDOW_DAYS", "90"))
 
-    TOKEN_INTERNO: str | None = os.getenv("FLIGHTS_API_INTERNAL_TOKEN")
+    _token = os.getenv("FLIGHTS_API_INTERNAL_TOKEN", "").strip()
+    TOKEN_INTERNO: str | None = _token or None
 
     CORS_ORIGINS: list[str] = _carregar_cors_origins()
 
