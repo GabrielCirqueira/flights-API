@@ -10,4 +10,7 @@ def saude() -> dict:
         "status": "ok",
         "servico": configuracoes.NOME_SERVICO,
         "versao": configuracoes.VERSAO_SERVICO,
+        "upstream": {
+            "proxy_configurado": configuracoes.PROXY_HTTPS is not None,
+        },
     }

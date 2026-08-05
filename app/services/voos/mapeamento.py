@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from urllib.parse import urlencode
 
 from fli.models.google_flights.base import FlightResult
@@ -139,7 +139,7 @@ def mapear_oferta(
             nome_companhia_principal=outbound.primary_airline_name,
             trechos=todos_trechos,
             url_busca_google_flights=url_google_flights(origem, destino, data_partida, data_retorno),
-            encontrado_em=datetime.now(timezone.utc),
+            encontrado_em=datetime.now(UTC),
             fonte="fli",
         )
 
@@ -164,6 +164,6 @@ def mapear_oferta(
         nome_companhia_principal=voo.primary_airline_name,
         trechos=trechos,
         url_busca_google_flights=url_google_flights(origem, destino, data_partida, data_retorno),
-        encontrado_em=datetime.now(timezone.utc),
+        encontrado_em=datetime.now(UTC),
         fonte="fli",
     )

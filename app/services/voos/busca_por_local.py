@@ -23,6 +23,24 @@ from app.services.voos.janela_util import resolver_intervalo_janela
 
 logger = logging.getLogger("flights_api.voos.busca_por_local")
 
+MENSAGEM_UPSTREAM_VAZIO = "upstream_sem_resultados"
+
+
+def _combinacao_de_resposta(orig: str, dest: str, res_busca: RespostaBusca) -> CombinacaoVooSaida:
+    if not res_busca.ofertas:
+        return CombinacaoVooSaida(
+            origem_iata=orig,
+            destino_iata=dest,
+            sucesso=False,
+            mensagem_erro=MENSAGEM_UPSTREAM_VAZIO,
+        )
+    return CombinacaoVooSaida(
+        origem_iata=orig,
+        destino_iata=dest,
+        preco_minimo=res_busca.ofertas[0].preco,
+        sucesso=True,
+    )
+
 
 def _executar_busca_par(req_par: RequisicaoBusca) -> tuple[str, str, RespostaBusca | None, Exception | None]:
     chave_cache = f"{req_par.origem}:{req_par.destino}:{req_par.data_partida}:{req_par.data_retorno}:{req_par.adultos}"
@@ -32,7 +50,8 @@ def _executar_busca_par(req_par: RequisicaoBusca) -> tuple[str, str, RespostaBus
 
     try:
         res = buscar_voos(req_par)
-        cache_voos.salvar(chave_cache, res)
+        if res.total > 0:
+            cache_voos.salvar(chave_cache, res)
         return (req_par.origem, req_par.destino, res, None)
     except Exception as exc:
         return (req_par.origem, req_par.destino, None, exc)
@@ -120,7 +139,7 @@ def _buscar_por_local_aberta(requisicao: RequisicaoBuscaPorLocal) -> RespostaBus
                         destino_iata=dest,
                         preco_minimo=None,
                         sucesso=False,
-                        mensagem_erro=str(exc) if exc else "sem_resultado",
+                        mensagem_erro=str(exc) if exc else MENSAGEM_UPSTREAM_VAZIO,
                     )
                 )
             else:
@@ -260,15 +279,7 @@ def buscar_voos_por_local(requisicao: RequisicaoBuscaPorLocal) -> RespostaBuscaP
                     )
                 )
             else:
-                menor_preco = res_busca.ofertas[0].preco if res_busca.ofertas else None
-                resultados_combinacoes.append(
-                    CombinacaoVooSaida(
-                        origem_iata=orig,
-                        destino_iata=dest,
-                        preco_minimo=menor_preco,
-                        sucesso=True,
-                    )
-                )
+                resultados_combinacoes.append(_combinacao_de_resposta(orig, dest, res_busca))
                 for of in res_busca.ofertas:
                     ofertas_todas.append(
                         OfertaBuscaPorLocalSaida(

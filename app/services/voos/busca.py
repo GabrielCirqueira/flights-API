@@ -75,6 +75,14 @@ def buscar_voos(requisicao: RequisicaoBusca) -> RespostaBusca:
             )
             if oferta is not None:
                 ofertas.append(oferta)
+    else:
+        logger.warning(
+            "fli.sem_resultados origem=%s destino=%s data=%s proxy=%s",
+            requisicao.origem,
+            requisicao.destino,
+            requisicao.data_partida,
+            bool(configuracoes.PROXY_HTTPS),
+        )
 
     return RespostaBusca(
         origem=requisicao.origem,

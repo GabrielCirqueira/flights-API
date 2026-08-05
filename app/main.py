@@ -6,9 +6,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import configuracoes
 from app.core.exceptions import tratar_excecao_http
 from app.core.middleware import rastreamento_e_autenticacao
+from app.core.upstream import configurar_upstream
 from app.routers import aeroportos, buscar, cidades, saude
 
 logging.basicConfig(level=logging.INFO)
+configurar_upstream()
 
 app = FastAPI(
     title=configuracoes.NOME_SERVICO,
